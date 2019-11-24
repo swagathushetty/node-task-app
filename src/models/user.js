@@ -2,6 +2,7 @@ const mongoose=require('mongoose')
 const validator=require('validator')
 const bcrypt=require('bcryptjs')
 const jwt=require('jsonwebtoken')
+const Task=require('./tasks')
 
 const userSchema=new mongoose.Schema({
     name:{
@@ -46,8 +47,31 @@ const userSchema=new mongoose.Schema({
             type:String,
             required:true
         }
-    }]
+    }],
+   avatar:{
+       type:Buffer //files are always stored as buffer
+   }
+},{
+    timestamps:true //by default timestamps is false
 })
+
+//virtual property is the relationship between two entities 
+//this is not stored in Database and is a mongoose property
+userSchema.virtual('tasks',{ //name can be anything
+    ref:'Task',
+    localField:'_id',    
+    foreignField:'owner' //name of the field on task
+})
+
+userSchema.methods.toJSON=function(){
+    const user=this
+    const userObject=user.toObject()
+
+    delete userObject.password
+    delete userObject.tokens
+    delete userObject.avatar
+    return userObject
+}
 
 userSchema.methods.generateAuthToken=async function(){
     const user=this
@@ -88,6 +112,14 @@ userSchema.pre('save',async function(next){
         user.password=await bcrypt.hash(user.password,8)
     }
     
+    next()
+})
+
+//before use user is deleted run the below code
+//delete user tasks when user is removed
+userSchema.pre('remove',async function(next){
+    const user=this
+    await Task.deleteMany({owner:user._id})
     next()
 })
 
